@@ -1,5 +1,6 @@
 package com.example789.cicero.callrecordingtest2;
 
+import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -11,12 +12,20 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 public class PhoneStateReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
+
+        MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
+
+        if ((mainActivity != null) && mainActivity.IsCallRecordingDisabled()) {
+            return;
+        }
 
         if (intent.getAction().equals(TelephonyManager.ACTION_PHONE_STATE_CHANGED)) {
 
@@ -74,8 +83,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
 
         Date callTimeStart = new Date();
-        SimpleDateFormat dateFormat = new SimpleDateFormat();
-        dateFormat.applyPattern("yyyy-MM-dd");
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
         String sDate = dateFormat.format(callTimeStart);
         dateFormat.applyPattern("HH-mm-ss");
         String sTime = dateFormat.format(callTimeStart);
@@ -86,14 +94,14 @@ public class PhoneStateReceiver extends BroadcastReceiver {
 
         File recordingsPath = new File(Environment.getExternalStorageDirectory()  + "/call_recordings_test");
 
-        if (!recordingsPath.isDirectory()) {
-            recordingsPath.mkdirs();
+        if (!recordingsPath.isDirectory() && recordingsPath.mkdirs()) {
+            Log.w(TAG, "Directory for recordings has been created");
         }
         String sPath = recordingsPath.getAbsolutePath() + "/";
 
         if (!bIncomingCall) {
             sPath += "outgoing_";
-        } else if (bIncomingCall && (sNumber != null)) {
+        } else if (sNumber != null) {
             sPath += sNumber;
         }
 
@@ -125,8 +133,13 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
     }
 
+    public static void setActivityRef(Activity activity) {
+        m_ActivityRef = new WeakReference<>(activity);
+    }
+
     private Context m_Context;
     private static int m_nPreviousState = TelephonyManager.CALL_STATE_IDLE;
     private final String TAG = "TestReceiver";
     private static MediaRecorder m_MediaRecorder;
+    private static WeakReference<Activity> m_ActivityRef;
 }
