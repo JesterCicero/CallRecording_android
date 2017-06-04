@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">CallRecordingTest2</string>
+    <string name="disable_checkbox_text">Disable Recording</string>
 </resources>
