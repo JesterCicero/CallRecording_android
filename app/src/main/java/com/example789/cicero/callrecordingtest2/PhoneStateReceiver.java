@@ -25,18 +25,7 @@ import java.util.Locale;
 public class PhoneStateReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-
-        m_Context = context;
-
-        CreateNotification();
-
-        if (m_ActivityRef != null) {
-            MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
-
-            if ((mainActivity != null) && mainActivity.IsCallRecordingDisabled()) {
-                return;
-            }
-        }
+        m_sContext = context;
 
         if (intent.getAction().equals(TelephonyManager.ACTION_PHONE_STATE_CHANGED)) {
 
@@ -84,60 +73,25 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     }
 
     private void ProcessOffHookState(String sNumber) {
+        m_bOffHookState = true;
+        m_sNumber = sNumber;
+        m_bIncomingCall = (m_nPreviousState == TelephonyManager.CALL_STATE_RINGING);
 
-        boolean bIncomingCall = (m_nPreviousState == TelephonyManager.CALL_STATE_RINGING);
-
-        if (bIncomingCall) {
+        if (m_bIncomingCall) {
             Log.w(TAG, "ProcessOffHookState: Incoming call");
         }
 
-        Date callTimeStart = new Date();
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String sDate = dateFormat.format(callTimeStart);
-        dateFormat.applyPattern("HH-mm-ss");
-        String sTime = dateFormat.format(callTimeStart);
+        CreateNotification();
 
-        m_MediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
-        m_MediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        m_MediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-
-        File recordingsPath = new File(Environment.getExternalStorageDirectory()  + "/call_recordings_test");
-
-        if (!recordingsPath.isDirectory() && recordingsPath.mkdirs()) {
-            Log.w(TAG, "Directory for recordings has been created");
-        }
-        String sPath = recordingsPath.getAbsolutePath() + "/";
-
-        if (!bIncomingCall) {
-            sPath += "outgoing_";
-        } else if (sNumber != null) {
-            sPath += sNumber;
-        }
-
-        sPath += sDate + "_" + sTime + ".m4a";
-
-        m_MediaRecorder.setOutputFile(sPath);
-        try {
-            m_MediaRecorder.prepare();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        m_MediaRecorder.start();
-
-        if (m_Context != null) {
-            Toast.makeText(m_Context.getApplicationContext(), "Recording started", Toast.LENGTH_SHORT).show();
+        if (IsRecordingEnabled()) {
+            StartRecording();
         }
     }
 
     private void ProcessIdleState() {
+        m_bOffHookState = false;
         if (m_nPreviousState != TelephonyManager.CALL_STATE_RINGING) {
-            m_MediaRecorder.stop();
-            m_MediaRecorder.release();
-            m_MediaRecorder = null;
-            if (m_Context != null) {
-                Toast.makeText(m_Context.getApplicationContext(), "Recording stopped", Toast.LENGTH_SHORT).show();
-            }
+            StopRecording();
         }
     }
 
@@ -145,11 +99,11 @@ public class PhoneStateReceiver extends BroadcastReceiver {
 
         NotificationCompat.Builder builder;
 
-        if (m_Context != null) {
-            builder = new NotificationCompat.Builder(m_Context);
+        if (m_sContext != null) {
+            builder = new NotificationCompat.Builder(m_sContext);
 
             if (builder != null) {
-                Resources resources = m_Context.getResources();
+                Resources resources = m_sContext.getResources();
 
                 if (resources != null) {
                     builder.setSmallIcon(R.drawable.call_recording)
@@ -158,24 +112,29 @@ public class PhoneStateReceiver extends BroadcastReceiver {
                 }
 
                 // Creates an explicit intent for an Activity in your app
-                Intent resultIntent = new Intent(m_Context, MainActivity.class);
+                Intent resultIntent = new Intent(m_sContext, MainActivity.class);
 
                 // The stack builder object will contain an artificial back stack for the
                 // started Activity.
                 // This ensures that navigating backward from the Activity leads out of
                 // your application to the Home screen.
-                TaskStackBuilder stackBuilder = TaskStackBuilder.create(m_Context);
+                TaskStackBuilder stackBuilder = TaskStackBuilder.create(m_sContext);
                 // Adds the back stack for the Intent (but not the Intent itself)
-                stackBuilder.addParentStack(MainActivity.class);
-                // Adds the Intent that starts the Activity to the top of the stack
-                stackBuilder.addNextIntent(resultIntent);
-                PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
-                builder.setContentIntent(resultPendingIntent);
-                NotificationManager mNotificationManager = (NotificationManager) m_Context.getSystemService(Context.NOTIFICATION_SERVICE);
-                // mId allows you to update the notification later on.
 
-                if (mNotificationManager != null) {
-                    mNotificationManager.notify(m_nNotificationID, builder.build());
+                if (stackBuilder != null) {
+                    stackBuilder.addParentStack(MainActivity.class);
+                    // Adds the Intent that starts the Activity to the top of the stack
+                    stackBuilder.addNextIntent(resultIntent);
+                    PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
+                    if (resultPendingIntent != null) {
+                        builder.setContentIntent(resultPendingIntent);
+                    }
+                    builder.setAutoCancel(true);
+                    NotificationManager mNotificationManager = (NotificationManager) m_sContext.getSystemService(Context.NOTIFICATION_SERVICE);
+                    // mId allows you to update the notification later on.
+                    if (mNotificationManager != null) {
+                        mNotificationManager.notify(NOTIFICATION_ID, builder.build());
+                    }
                 }
             }
         }
@@ -185,10 +144,91 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         m_ActivityRef = new WeakReference<>(activity);
     }
 
-    private Context m_Context;
+    public static void StartRecording() {
+
+        if (!m_bRecordingStarted && (m_MediaRecorder != null)) {
+            m_MediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+            m_MediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            m_MediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+
+            Date callTimeStart = new Date();
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            String sDate = dateFormat.format(callTimeStart);
+            dateFormat.applyPattern("HH-mm-ss");
+            String sTime = dateFormat.format(callTimeStart);
+
+            File recordingsPath = new File(Environment.getExternalStorageDirectory()  + "/call_recordings_test");
+
+            if (!recordingsPath.isDirectory() && recordingsPath.mkdirs()) {
+                Log.w(TAG, "Directory for recordings has been created");
+            }
+            String sPath = recordingsPath.getAbsolutePath() + "/";
+
+            if (!m_bIncomingCall) {
+                sPath += "outgoing_";
+            } else if (m_sNumber != null) {
+                sPath += m_sNumber;
+            }
+
+            sPath += sDate + "_" + sTime + ".m4a";
+
+            m_MediaRecorder.setOutputFile(sPath);
+            try {
+                m_MediaRecorder.prepare();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            m_MediaRecorder.start();
+
+            if (m_sContext != null) {
+                Toast.makeText(m_sContext.getApplicationContext(), "Recording started", Toast.LENGTH_SHORT).show();
+            }
+
+            m_bRecordingStarted = true;
+        }
+    }
+
+    public static void StopRecording() {
+        if (m_bRecordingStarted && (m_MediaRecorder != null)) {
+            m_MediaRecorder.stop();
+            m_MediaRecorder.release();
+            m_MediaRecorder = null;
+
+            if (m_sContext != null) {
+                Toast.makeText(m_sContext.getApplicationContext(), "Recording stopped", Toast.LENGTH_SHORT).show();
+            }
+
+            m_bRecordingStarted = false;
+        }
+    }
+
+    public static boolean IsRecordingEnabled() {
+
+        boolean bRecordingEnabled = true;
+
+        if (m_ActivityRef != null) {
+            MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
+
+            m_bRecordingDisabled = mainActivity.IsCallRecordingDisabled();
+
+            if ((mainActivity != null) && m_bRecordingDisabled) {
+                bRecordingEnabled = false;
+            }
+        }
+
+        return bRecordingEnabled;
+    }
+
+    private static Context m_sContext;
     private static int m_nPreviousState = TelephonyManager.CALL_STATE_IDLE;
-    private final String TAG = "PhoneStateReceiver";
-    private final int m_nNotificationID = R.drawable.call_recording;
+    private static final String TAG = "PhoneStateReceiver";
+    private final int NOTIFICATION_ID = R.drawable.call_recording;
     private static MediaRecorder m_MediaRecorder;
     private static WeakReference<Activity> m_ActivityRef;
+    public static boolean m_bRecordingStarted = false;
+    public static boolean m_bRecordingDisabled = false;
+    private static boolean m_bIncomingCall;
+    public static boolean m_bOffHookState;
+    private static String m_sNumber;
 }
