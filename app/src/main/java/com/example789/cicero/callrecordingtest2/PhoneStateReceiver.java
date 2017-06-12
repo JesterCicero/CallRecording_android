@@ -1,11 +1,16 @@
 package com.example789.cicero.callrecordingtest2;
 
 import android.app.Activity;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.media.MediaRecorder;
 import android.os.Environment;
+import android.support.v4.app.TaskStackBuilder;
+import android.support.v7.app.NotificationCompat;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.widget.Toast;
@@ -20,6 +25,10 @@ import java.util.Locale;
 public class PhoneStateReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
+
+        m_Context = context;
+
+        CreateNotification();
 
         if (m_ActivityRef != null) {
             MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
@@ -57,8 +66,6 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     public void OnCallStateChanged(Context context, int nState, String sNumber) {
 
         if (nState != m_nPreviousState) {
-
-            m_Context = context;
 
             switch (nState) {
                 case TelephonyManager.CALL_STATE_OFFHOOK:
@@ -134,13 +141,54 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
     }
 
+    public void CreateNotification() {
+
+        NotificationCompat.Builder builder;
+
+        if (m_Context != null) {
+            builder = new NotificationCompat.Builder(m_Context);
+
+            if (builder != null) {
+                Resources resources = m_Context.getResources();
+
+                if (resources != null) {
+                    builder.setSmallIcon(R.drawable.call_recording)
+                            .setContentTitle(resources.getString(R.string.call_recording_title_text))
+                            .setContentText(resources.getString(R.string.call_recording_text));
+                }
+
+                // Creates an explicit intent for an Activity in your app
+                Intent resultIntent = new Intent(m_Context, MainActivity.class);
+
+                // The stack builder object will contain an artificial back stack for the
+                // started Activity.
+                // This ensures that navigating backward from the Activity leads out of
+                // your application to the Home screen.
+                TaskStackBuilder stackBuilder = TaskStackBuilder.create(m_Context);
+                // Adds the back stack for the Intent (but not the Intent itself)
+                stackBuilder.addParentStack(MainActivity.class);
+                // Adds the Intent that starts the Activity to the top of the stack
+                stackBuilder.addNextIntent(resultIntent);
+                PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
+                builder.setContentIntent(resultPendingIntent);
+                NotificationManager mNotificationManager = (NotificationManager) m_Context.getSystemService(Context.NOTIFICATION_SERVICE);
+                // mId allows you to update the notification later on.
+
+                if (mNotificationManager != null) {
+                    mNotificationManager.notify(m_nNotificationID, builder.build());
+                }
+            }
+        }
+    }
+
     public static void setActivityRef(Activity activity) {
         m_ActivityRef = new WeakReference<>(activity);
     }
 
     private Context m_Context;
     private static int m_nPreviousState = TelephonyManager.CALL_STATE_IDLE;
-    private final String TAG = "TestReceiver";
+    private final String TAG = "PhoneStateReceiver";
+    private final int m_nNotificationID = R.drawable.call_recording;
     private static MediaRecorder m_MediaRecorder;
     private static WeakReference<Activity> m_ActivityRef;
 }
