@@ -21,10 +21,12 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
 
-        MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
+        if (m_ActivityRef != null) {
+            MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
 
-        if ((mainActivity != null) && mainActivity.IsCallRecordingDisabled()) {
-            return;
+            if ((mainActivity != null) && mainActivity.IsCallRecordingDisabled()) {
+                return;
+            }
         }
 
         if (intent.getAction().equals(TelephonyManager.ACTION_PHONE_STATE_CHANGED)) {
@@ -115,7 +117,6 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
 
         m_MediaRecorder.start();
-
 
         if (m_Context != null) {
             Toast.makeText(m_Context.getApplicationContext(), "Recording started", Toast.LENGTH_SHORT).show();
