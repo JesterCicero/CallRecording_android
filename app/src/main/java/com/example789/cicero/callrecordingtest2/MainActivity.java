@@ -32,7 +32,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 PhoneStateReceiver.m_bRecordingDisabled = m_bCallRecordingDisabled;
-                PhoneStateReceiver.setActivityRef(MainActivity.this);
+                PhoneStateReceiver.SetActivityRef(MainActivity.this);
             }
         });
     }

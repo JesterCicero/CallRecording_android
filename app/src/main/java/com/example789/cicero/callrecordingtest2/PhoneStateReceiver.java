@@ -25,16 +25,14 @@ import java.util.Locale;
 public class PhoneStateReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        m_sContext = context;
+        m_Context = context;
 
         if (intent.getAction().equals(TelephonyManager.ACTION_PHONE_STATE_CHANGED)) {
-
             if (m_MediaRecorder == null) {
                 m_MediaRecorder = new MediaRecorder();
             }
 
             String sState = intent.getExtras().getString(TelephonyManager.EXTRA_STATE);
-            String sNumber = intent.getExtras().getString(TelephonyManager.EXTRA_INCOMING_NUMBER);
             int nState = 0;
 
             if (sState != null) {
@@ -43,22 +41,21 @@ public class PhoneStateReceiver extends BroadcastReceiver {
                 } else if (sState.equals(TelephonyManager.EXTRA_STATE_OFFHOOK)) {
                     nState = TelephonyManager.CALL_STATE_OFFHOOK;
                 } else if (sState.equals(TelephonyManager.EXTRA_STATE_RINGING)) {
+                    m_sNumber = intent.getExtras().getString(TelephonyManager.EXTRA_INCOMING_NUMBER);
                     nState = TelephonyManager.CALL_STATE_RINGING;
                 }
             }
 
-            OnCallStateChanged(context, nState, sNumber);
+            OnCallStateChanged(context, nState);
             m_nPreviousState = nState;
         }
     }
 
-    public void OnCallStateChanged(Context context, int nState, String sNumber) {
-
+    public void OnCallStateChanged(Context context, int nState) {
         if (nState != m_nPreviousState) {
-
             switch (nState) {
                 case TelephonyManager.CALL_STATE_OFFHOOK:
-                    ProcessOffHookState(sNumber);
+                    ProcessOffHookState();
                     break;
 
                 case TelephonyManager.CALL_STATE_IDLE:
@@ -72,9 +69,8 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
     }
 
-    private void ProcessOffHookState(String sNumber) {
+    private void ProcessOffHookState() {
         m_bOffHookState = true;
-        m_sNumber = sNumber;
         m_bIncomingCall = (m_nPreviousState == TelephonyManager.CALL_STATE_RINGING);
 
         if (m_bIncomingCall) {
@@ -92,18 +88,18 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         m_bOffHookState = false;
         if (m_nPreviousState != TelephonyManager.CALL_STATE_RINGING) {
             StopRecording();
+            DismissNotification();
         }
     }
 
     public void CreateNotification() {
-
         NotificationCompat.Builder builder;
 
-        if (m_sContext != null) {
-            builder = new NotificationCompat.Builder(m_sContext);
+        if (m_Context != null) {
+            builder = new NotificationCompat.Builder(m_Context);
 
             if (builder != null) {
-                Resources resources = m_sContext.getResources();
+                Resources resources = m_Context.getResources();
 
                 if (resources != null) {
                     builder.setSmallIcon(R.drawable.call_recording)
@@ -112,13 +108,13 @@ public class PhoneStateReceiver extends BroadcastReceiver {
                 }
 
                 // Creates an explicit intent for an Activity in your app
-                Intent resultIntent = new Intent(m_sContext, MainActivity.class);
+                Intent resultIntent = new Intent(m_Context, MainActivity.class);
 
                 // The stack builder object will contain an artificial back stack for the
                 // started Activity.
                 // This ensures that navigating backward from the Activity leads out of
                 // your application to the Home screen.
-                TaskStackBuilder stackBuilder = TaskStackBuilder.create(m_sContext);
+                TaskStackBuilder stackBuilder = TaskStackBuilder.create(m_Context);
                 // Adds the back stack for the Intent (but not the Intent itself)
 
                 if (stackBuilder != null) {
@@ -126,21 +122,32 @@ public class PhoneStateReceiver extends BroadcastReceiver {
                     // Adds the Intent that starts the Activity to the top of the stack
                     stackBuilder.addNextIntent(resultIntent);
                     PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
+
                     if (resultPendingIntent != null) {
                         builder.setContentIntent(resultPendingIntent);
                     }
+
                     builder.setAutoCancel(true);
-                    NotificationManager mNotificationManager = (NotificationManager) m_sContext.getSystemService(Context.NOTIFICATION_SERVICE);
+
+                    NotificationManager notificationManager = (NotificationManager) m_Context.getSystemService(Context.NOTIFICATION_SERVICE);
                     // mId allows you to update the notification later on.
-                    if (mNotificationManager != null) {
-                        mNotificationManager.notify(NOTIFICATION_ID, builder.build());
+                    if (notificationManager != null) {
+                        notificationManager.notify(NOTIFICATION_ID, builder.build());
                     }
                 }
             }
         }
     }
 
-    public static void setActivityRef(Activity activity) {
+    public void DismissNotification() {
+        NotificationManager notificationManager = (NotificationManager) m_Context.getSystemService(Context.NOTIFICATION_SERVICE);
+        // mId allows you to update the notification later on.
+        if (notificationManager != null) {
+            notificationManager.cancel(NOTIFICATION_ID);
+        }
+    }
+
+    public static void SetActivityRef(Activity activity) {
         m_ActivityRef = new WeakReference<>(activity);
     }
 
@@ -167,7 +174,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
             if (!m_bIncomingCall) {
                 sPath += "outgoing_";
             } else if (m_sNumber != null) {
-                sPath += m_sNumber;
+                sPath += m_sNumber + " ";
             }
 
             sPath += sDate + "_" + sTime + ".m4a";
@@ -181,8 +188,8 @@ public class PhoneStateReceiver extends BroadcastReceiver {
 
             m_MediaRecorder.start();
 
-            if (m_sContext != null) {
-                Toast.makeText(m_sContext.getApplicationContext(), "Recording started", Toast.LENGTH_SHORT).show();
+            if (m_Context != null) {
+                Toast.makeText(m_Context.getApplicationContext(), "Recording started", Toast.LENGTH_SHORT).show();
             }
 
             m_bRecordingStarted = true;
@@ -195,8 +202,8 @@ public class PhoneStateReceiver extends BroadcastReceiver {
             m_MediaRecorder.release();
             m_MediaRecorder = null;
 
-            if (m_sContext != null) {
-                Toast.makeText(m_sContext.getApplicationContext(), "Recording stopped", Toast.LENGTH_SHORT).show();
+            if (m_Context != null) {
+                Toast.makeText(m_Context.getApplicationContext(), "Recording stopped", Toast.LENGTH_SHORT).show();
             }
 
             m_bRecordingStarted = false;
@@ -220,7 +227,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         return bRecordingEnabled;
     }
 
-    private static Context m_sContext;
+    private static Context m_Context;
     private static int m_nPreviousState = TelephonyManager.CALL_STATE_IDLE;
     private static final String TAG = "PhoneStateReceiver";
     private final int NOTIFICATION_ID = R.drawable.call_recording;
