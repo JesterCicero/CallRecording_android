@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.res.Resources;
 import android.media.MediaRecorder;
 import android.os.Environment;
+import android.support.v4.app.Fragment;
 import android.support.v4.app.TaskStackBuilder;
 import android.support.v7.app.NotificationCompat;
 import android.telephony.TelephonyManager;
@@ -79,7 +80,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
 
         CreateNotification();
 
-        if (IsRecordingEnabled()) {
+        if (!IsRecordingDisabled()) {
             StartRecording();
         }
     }
@@ -87,7 +88,9 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     private void ProcessIdleState() {
         m_bOffHookState = false;
         if (m_nPreviousState != TelephonyManager.CALL_STATE_RINGING) {
-            StopRecording();
+            if (!IsRecordingDisabled()) {
+                StopRecording();
+            }
             DismissNotification();
         }
     }
@@ -147,8 +150,8 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
     }
 
-    public static void SetActivityRef(Activity activity) {
-        m_ActivityRef = new WeakReference<>(activity);
+    public static void SetFragmentRef(Fragment fragment) {
+        m_FragmentRef = new WeakReference<>(fragment);
     }
 
     public static void StartRecording() {
@@ -210,21 +213,16 @@ public class PhoneStateReceiver extends BroadcastReceiver {
         }
     }
 
-    public static boolean IsRecordingEnabled() {
+    public static boolean IsRecordingDisabled() {
+        if (m_FragmentRef != null) {
+            MainFragment mainFragment = (MainFragment) m_FragmentRef.get();
 
-        boolean bRecordingEnabled = true;
-
-        if (m_ActivityRef != null) {
-            MainActivity mainActivity = (MainActivity) m_ActivityRef.get();
-
-            m_bRecordingDisabled = mainActivity.IsCallRecordingDisabled();
-
-            if ((mainActivity != null) && m_bRecordingDisabled) {
-                bRecordingEnabled = false;
+            if (mainFragment != null) {
+                m_bRecordingDisabled = mainFragment.IsCallRecordingDisabled();
             }
         }
 
-        return bRecordingEnabled;
+        return m_bRecordingDisabled;
     }
 
     private static Context m_Context;
@@ -232,7 +230,7 @@ public class PhoneStateReceiver extends BroadcastReceiver {
     private static final String TAG = "PhoneStateReceiver";
     private final int NOTIFICATION_ID = R.drawable.call_recording;
     private static MediaRecorder m_MediaRecorder;
-    private static WeakReference<Activity> m_ActivityRef;
+    private static WeakReference<Fragment> m_FragmentRef;
     public static boolean m_bRecordingStarted = false;
     public static boolean m_bRecordingDisabled = false;
     private static boolean m_bIncomingCall;
